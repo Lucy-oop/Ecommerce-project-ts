@@ -1,4 +1,3 @@
-// backend/server.js
 import express from "express";
 import cors from "cors";
 import path from "path";
@@ -9,17 +8,29 @@ import crypto from "crypto";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Needed for __dirname in ES Modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 
 const DATA_DIR = __dirname;
 
-app.use("/images", express.static(path.join(__dirname, "images")));
 
-app.use(cors());
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173", // local dev
+      "http://127.0.0.1:5173",
+      "https://lucy-oop.github.io", // github pages domain
+    ],
+  })
+);
+
 app.use(express.json());
 
+app.use("/images", express.static(path.join(__dirname, "images")));
+
+// -------------------- HELPERS --------------------
 async function readJson(fileName) {
   const filePath = path.join(DATA_DIR, fileName);
   const raw = await fs.readFile(filePath, "utf-8");
@@ -57,7 +68,6 @@ app.get("/api/products", async (req, res) => {
 app.get("/api/delivery-options", async (req, res) => {
   try {
     const options = await readJson("deliveryOptions.json");
-
     res.json(options);
   } catch (err) {
     res.status(500).json({ error: String(err) });
@@ -94,10 +104,10 @@ app.post("/api/cart-items", async (req, res) => {
     const qty = Number(quantity) || 1;
 
     const existing = cart.find((c) => c.productId === productId);
+
     if (existing) {
       existing.quantity += qty;
     } else {
-      // default delivery option if missing
       cart.push({ productId, quantity: qty, deliveryOptionId: "1" });
     }
 
@@ -230,7 +240,6 @@ app.post("/api/orders", async (req, res) => {
 
     const now = Date.now();
 
-    // Build order products with estimatedDeliveryTimeMs based on deliveryDays
     const orderProducts = cart.map((item) => {
       const option = deliveryOptions.find((o) => o.id === item.deliveryOptionId);
       const deliveryDays = option ? option.deliveryDays : 7;
@@ -242,7 +251,6 @@ app.post("/api/orders", async (req, res) => {
       };
     });
 
-    // Calculate totalCostCents (same as payment summary)
     let productCostCents = 0;
     let shippingCostCents = 0;
 
@@ -268,7 +276,7 @@ app.post("/api/orders", async (req, res) => {
     orders.unshift(newOrder);
     await writeJson("orders.json", orders);
 
-    // Clear cart
+    // Clear cart after ordering
     await writeJson("cart.json", []);
 
     res.json(newOrder);
@@ -282,12 +290,13 @@ app.post("/api/reset", async (req, res) => {
   res.json({ ok: true, message: "reset not implemented in this JSON server" });
 });
 
-// -------------------- START --------------------
-app.listen(PORT, () => {
+// -------------------- START SERVER (ONLY ONCE) --------------------
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ JSON API server running at http://localhost:${PORT}`);
-  console.log(`✅ products:  http://localhost:${PORT}/api/products`);
-  console.log(`✅ cart:      http://localhost:${PORT}/api/cart-items?expand=product`);
-  console.log(`✅ delivery:  http://localhost:${PORT}/api/delivery-options`);
-  console.log(`✅ orders:    http://localhost:${PORT}/api/orders`);
-  console.log(`✅ payment:   http://localhost:${PORT}/api/payment-summary`);
+  console.log(`✅ products:  /api/products`);
+  console.log(`✅ cart:      /api/cart-items?expand=product`);
+  console.log(`✅ delivery:  /api/delivery-options`);
+  console.log(`✅ orders:    /api/orders`);
+  console.log(`✅ payment:   /api/payment-summary`);
+  console.log(`✅ images:    /images/...`);
 });
